@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Semester Selection</title>
+  <link rel="stylesheet" href="form.css">
+
+</head>
+<body>
+  <h1>Select Semester</h1>
+  <form id="semesterForm">
+    <select id="semesterSelect" name="semester">
+      <option selected disabled>Select a semester</option>
+    </select>
+    <button type="submit">Submit</button>
+  </form>
+
+  <button id='logoutButton' onclick="logout()">Logout</button>
+
+  <script>
+    let accessToken = null;
+    let refreshToken = null;
+    const API_BASE = 'https://localhost:8443';
+
+//loads the semesters from local storage
+    async function loadSemesters() {
+      try {
+          let response = await fetch(`${API_BASE}/unix/semesters`, {
+              headers: {'Authorization': 'Bearer ' + localStorage.getItem('accessToken')}
+            }
+          ); 
+          //if response not ok check that refresh token is valid, if so run like normal
+        if (!response.ok) {
+          await getProtectedData();
+          response = await fetch(`${API_BASE}/unix/semesters`, {
+              headers: {'Authorization': 'Bearer ' + localStorage.getItem('accessToken')}
+            }
+          );
+          if (!response.ok) { 
+            throw new Error('Failed to fetch semesters');
+          }
+        }
+        const semesters = await response.json();
+
+        const select = document.getElementById('semesterSelect');
+        
+        
+        if (semesters.length === 0) {
+          select.innerHTML = '<option>No open semesters available</option>';
+          return;
+        }
+
+        semesters.forEach(s => {
+          const option = document.createElement('option');
+          option.value = `${s.semesterID}`;
+          option.textContent = `Semester ${s.semester} ${s.year}`;
+          select.appendChild(option);
+        });
+
+      } catch (error) {
+        console.error(error);
+        const select = document.getElementById('semesterSelect');
+        select.innerHTML = '<option>Error loading semesters</option>';
+      }
+    }
+    loadSemesters()
+
+    document.getElementById('semesterForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const selected = document.getElementById('semesterSelect').value;
+      localStorage.setItem('selectedSemester', selected)
+      
+      window.location.href = 'courseSelection.html';
+
+    });
+
+    async function getProtectedData() {
+      let response = await fetchWithAuth('https://localhost:8443/api/validate');
+      const data = await response.status;
+      console.log("Protected API response:", data);
+    }
+
+    async function fetchWithAuth(url) {
+
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem("accessToken")}`
+        }
+      });
+
+      if ((response.status === 401) ||  (response.status === 403)) {
+        console.warn("Access token expired. Refreshing...");
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          response = await fetch(url, {
+            method: "POST",
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
+          });
+        } else {
+          throw new Error("Unable to refresh token. Please login again.");
+        }
+      }
+
+      return response;
+    }
+
+    async function refreshAccessToken() {
+      const response = await fetch('https://localhost:8443/api/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' } 
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        accessToken = data.token;
+        localStorage.removeItem('accessToken');
+        localStorage.setItem('accessToken', data.token);
+        console.log("Token refreshed");
+        return true;
+      } else {
+        console.error("Refresh token expired or invalid");
+        return false;
+      }
+    }
+
+    function logout() {
+      fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      localStorage.clear();
+      window.location.href = 'login.html';
+
+    }
+  </script>
+</body>
+</html>

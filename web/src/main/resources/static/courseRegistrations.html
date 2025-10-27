@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Course Registrations</title>
+  <link rel="stylesheet" href="form.css">
+
+</head>
+<body>
+  <h1>Registered Courses</h1>
+        <div id="courseRego" name="courseRego" class="courseRego">
+    </div>
+
+  <button id='logoutButton' onclick="logout()">Logout</button>
+
+  </form>
+  <script>
+    const API_BASE = 'https://localhost:8443';
+    async function fetchRegistrations() {
+      try {
+        let response = await fetch(`${API_BASE}/scr/${localStorage.getItem('stdNo')}`, {
+            headers: {'Authorization': 'Bearer ' + localStorage.getItem('accessToken')}
+        }
+            
+        );
+        //if response not ok check that refresh token is valid, if so run like normal
+        if (!response.ok) {
+          await getProtectedData();
+          response = await fetch(`${API_BASE}/scr/${localStorage.getItem('stdNo')}`, {
+            headers: {'Authorization': 'Bearer ' + localStorage.getItem('accessToken')}
+            }
+          );
+          if (!response.ok) {
+            throw new Error('Failed to fetch registrations');
+          }
+        }
+        const registrations = await response.json();
+
+        const container = document.getElementById('courseRego');
+
+        if (registrations.length === 0) {
+          container.textContent = 'No course registrations found.';
+          return;
+        }
+        //registures a student for a course
+        registrations.forEach(reg => {
+          const regDiv = document.createElement('div');
+          regDiv.className = 'course line-style';
+          regDiv.innerHTML = `
+            Student: <strong>${reg.stdNo}</strong> |
+            Course: <strong>${reg.courseID}</strong> |
+            Semester: <strong>${reg.semesterID}</strong>
+          `;
+          //regDiv.textContent = `Student: ${reg.stdNo}, Course: ${reg.courseID}, Semester: ${reg.semesterID}`;
+          container.appendChild(regDiv);
+        });
+
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('courseRego').textContent = 'Error loading course rego.';
+      }
+    }
+    async function loadErrors() {
+    const errorMsg = localStorage.getItem('error');
+//creates the format for the error message if a student is already enrolled
+      if (errorMsg !== null) {
+        const errorDiv = document.createElement('div');
+        errorDiv.textContent = errorMsg;
+        errorDiv.style.fontWeight = 'bold';
+        errorDiv.style.marginTop = '12px';
+
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.bottom = '200px';
+        errorDiv.style.left = '50%';
+        errorDiv.style.transform = 'translateX(-50%)';
+        errorDiv.style.textAlign = 'center';
+        document.body.appendChild(errorDiv);
+
+        localStorage.removeItem('error'); 
+      } 
+    }
+
+    
+    fetchRegistrations();
+    function logout() {
+      fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      localStorage.clear();
+      window.location.href = 'login.html';
+
+    }
+
+
+
+    </script>
+  
+  <script>
+    //don't ask, it works
+    loadErrors();
+  </script>
+</body>
+</html>

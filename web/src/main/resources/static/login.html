@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Token Auth with Refresh</title>
+  <link rel="stylesheet" href="form.css">
+
+</head>
+<body>
+  <h1>Login</h1>
+  
+  <div id="loginForm">
+    <input type="text" id="username" placeholder="Username" />
+    <input type="password" id="password" placeholder="Password" />
+    <button onclick="login()">Login</button>
+  </div>
+
+
+    <button id='logoutButton' onclick="logout()">Logout</button>
+
+
+  <script>
+    const API_BASE = 'https://localhost:8443/api';
+
+    async function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      
+
+      const res = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', 
+        body: JSON.stringify({ username, password })
+      });
+
+      if (res.ok) {
+        const data = await res.json(); 
+        //storing session details for other html pages
+        localStorage.setItem('accessToken', data.token);
+        localStorage.setItem('stdNo', username);
+        window.location.href = 'semesterSelection.html';
+      } else {
+        alert('Login failed');
+      }
+    }
+    //refreshing token
+    async function getProtectedData() {
+      let response = await fetchWithAuth('https://localhost:8443/api/validate');
+      const data = await response.status;
+      console.log("Protected API response:", data);
+    }
+
+    async function fetchWithAuth(url) {
+
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem("accessToken")}`
+        }
+      });
+
+      if ((response.status === 401) ||  (response.status === 403)) {
+        console.warn("Access token expired. Refreshing...");
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          response = await fetch(url, {
+            method: "POST",
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
+          });
+        } else {
+          throw new Error("Unable to refresh token. Please login again.");
+        }
+      }
+
+      return response;
+    }
+
+    async function refreshAccessToken() {
+      const response = await fetch('https://localhost:8443/api/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' } 
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        accessToken = data.token;
+        //replace old token with the new one
+        localStorage.removeItem('accessToken');
+        localStorage.setItem('accessToken', data.token);
+        console.log("Token refreshed");
+        return true;
+      } else {
+        console.error("Refresh token expired or invalid");
+        return false;
+      }
+    }
+    //logs user out
+    function logout() {
+      fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      localStorage.clear();
+      location.reload();
+      }
+  </script>
+</body>
+</html>
