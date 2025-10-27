@@ -1,0 +1,25 @@
+spring:
+#JWT configurations
+    jwt: 
+        secret: ${JWT_SECRET}
+        access-token-expiration: 300000 # 5 minutes
+        refresh-token-expiration: 3600000 # 1 hour
+        
+    profiles:
+        active: dev
+
+    
+    datasource:
+        url: jdbc:mysql://localhost:3306/unix
+        username: UniX_admin
+        password: P@ssword1
+
+#enable https
+server:
+    port: 8443
+    ssl:
+        enabled: true
+        key-store: classpath:serverkey.jks
+        key-store-password: P@ssword1
+        key-store-type: JKS
+        key-alias: myserver

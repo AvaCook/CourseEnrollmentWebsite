@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Select a Course</title>
+  <link rel="stylesheet" href="form.css">
+
+</head>
+<body>
+  <h1>Select a Course</h1>
+
+  <form id="courseForm">
+    <div id="courseOptions">Loading courses...</div>
+    <button type="submit">Submit</button>
+  </form>
+
+  <button id='logoutButton' onclick="logout()">Logout</button>
+
+
+  <script>
+    const API_BASE = 'https://localhost:8443';
+    async function loadCourses() {
+      try {
+        let response = await fetch(`${API_BASE}/courses/${localStorage.getItem('stdNo')}/${localStorage.getItem('selectedSemester')}`, {
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('accessToken')
+          }
+        });
+
+          if (!response.ok) {
+            await getProtectedData();
+            response = await fetch(`${API_BASE}/courses/${localStorage.getItem('stdNo')}/${localStorage.getItem('selectedSemester')}`, {
+            headers: {'Authorization': 'Bearer ' + localStorage.getItem('accessToken')}
+            }          
+          );
+            if (!response.ok) { 
+              throw new Error('Failed to fetch courses');
+            }
+        }        
+        const courses = await response.json();
+
+        const container = document.getElementById('courseOptions');
+        container.innerHTML = '';
+
+        if (courses.length === 0) {
+          container.textContent = 'No courses available.';
+          return;
+        }
+
+        courses.forEach((course, index) => {
+          const div = document.createElement('div');
+          div.className = 'course';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.id = `course${index}`;
+          checkbox.name = 'course';
+          checkbox.value = course.courseID;
+          if (course.enrolled == 'true'){
+            checkbox.disabled = 1;
+
+          }
+          const label = document.createElement('label');
+          label.htmlFor = checkbox.courseID;
+          label.textContent = `${course.courseID} - Enrolled: ${course.enrolled}`;
+
+          div.appendChild(checkbox);
+          div.appendChild(label);
+          container.appendChild(div);
+        });
+
+      } catch (err) {
+        document.getElementById('courseOptions').textContent = 'Error loading courses.';
+        console.error(err);
+      }
+    }
+    
+    loadCourses();
+    document.getElementById('courseForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const selectedCourses = Array.from(document.querySelectorAll('input[name="course"]:checked'))
+                                  .map(cb => cb.value);
+
+      if (selectedCourses.length === 0) {
+        alert('Please select at least one course.');
+        return;
+      }
+
+      const semesterId = localStorage.getItem('selectedSemester');
+      const studentId = localStorage.getItem('stdNo');
+
+      for (const courseId of selectedCourses) {
+        try {
+            let response = await fetch(`${API_BASE}/scr/registrations`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + localStorage.getItem('accessToken')
+            },
+            body: JSON.stringify({
+              stdNo: studentId,
+              courseID: courseId,
+              semesterID: semesterId
+            })
+          });
+          //if response not ok check that refresh token is valid, if so run like normal
+
+          if (!response.ok) {
+            await getProtectedData();
+            response = await fetch(`${API_BASE}/scr/registrations`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('accessToken')
+              },
+              body: JSON.stringify({
+                stdNo: studentId,
+                courseID: courseId,
+                semesterID: semesterId
+              })
+            });
+            if (!response.ok) { 
+            throw new Error('Registration failed for ' + courseId);
+          }
+          }
+          const registration = await response.json();
+          
+          if(registration.enrolled == 'false'){
+            alert(`Error: Unable to enrol in ${courseId}`);
+            if(localStorage.getItem('error') != null){
+              var error = localStorage.getItem('error');
+              localStorage.setItem('error', error + `\nError: Unable to enrol in ${courseId}`)
+            }
+            else{
+              localStorage.setItem('error', `Error: Unable to enrol in ${courseId}`)
+
+            }
+
+          }
+
+        } catch (err) {
+          console.error(err);
+          alert(`Error registering course ${courseId}`);
+        }
+      }
+      window.location.href = 'courseRegistrations.html';
+
+    });
+
+
+    async function getProtectedData() {
+      let response = await fetchWithAuth('https://localhost:8443/api/validate');
+      const data = await response.status;
+      console.log("Protected API response:", data);
+    }
+
+    async function fetchWithAuth(url) {
+
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem("accessToken")}`
+        }
+      });
+
+      if ((response.status === 401) ||  (response.status === 403)) {
+        console.warn("Access token expired. Refreshing...");
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          response = await fetch(url, {
+            method: "POST",
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
+          });
+        } else {
+          throw new Error("Unable to refresh token. Please login again.");
+        }
+      }
+
+      return response;
+    }
+
+    async function refreshAccessToken() {
+      const response = await fetch('https://localhost:8443/api/refresh', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        accessToken = data.token;
+        localStorage.removeItem('accessToken');
+        localStorage.setItem('accessToken', data.token);
+        console.log("Token refreshed");
+        return true;
+      } else {
+        console.error("Refresh token expired or invalid");
+        return false;
+      }
+    }
+    function logout() {
+      fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      localStorage.clear();
+      window.location.href = 'login.html';
+
+    }
+  </script>
+
+</body>
+</html>
