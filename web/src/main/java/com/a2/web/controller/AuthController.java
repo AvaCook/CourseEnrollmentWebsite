@@ -34,7 +34,7 @@ public class AuthController {
         String username = user.get("username");
         String password = user.get("password");
 
-        //business logic
+        //the business logic
         StudentDTO student = studentService.authenticateStudent(username, password);
         
         if (student!= null) {
